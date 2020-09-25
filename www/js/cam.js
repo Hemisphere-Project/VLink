@@ -1,5 +1,19 @@
 var roomID = null;
 var retry = null;
+var monitor = true;
+
+// Refresh Btn status
+setInterval(()=>{
+    if (monitor)
+        $('.viewBtn').each((i,v)=>{
+            connection.checkPresence($(v).data('room'), function(isRoomExist, roomid) {
+                console.log(roomid, isRoomExist)
+                if (isRoomExist)   $("#nav").find(`[data-room='${roomid}']`).addClass('recON')
+                else               $("#nav").find(`[data-room='${roomid}']`).removeClass('recON')
+            });   
+        })
+}, 1000)
+
 
 function getConnectedDevices(type, callback) {
     navigator.mediaDevices.enumerateDevices()
@@ -61,6 +75,7 @@ function broadcastTo(roomid) {
                 }
 
                 $('.viewBtn').hide()
+                monitor = false
 
                 connection.open(roomid, function(isRoomOpened, roomid, error) {
                     if(error) {
@@ -84,7 +99,7 @@ function broadcastTo(roomid) {
 var connection = new RTCMultiConnection();
 
 // by default, socket.io server is assumed to be deployed on your own URL
-connection.socketURL = 'https://rtcmulticonnection.herokuapp.com:443/';
+connection.socketURL = 'https://v.kxkm.net:9001/';
 
 // comment-out below line if you do not have your own socket.io server
 // connection.socketURL = 'https://rtcmulticonnection.herokuapp.com:443/';

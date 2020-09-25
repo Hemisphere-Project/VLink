@@ -73,6 +73,10 @@ button:active {
   color: green;
 }
 
+.recON {
+  color: red;
+}
+
 td {
   padding: 5px;
 }
