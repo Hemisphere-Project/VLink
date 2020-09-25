@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="utf-8">
+    <title>Vlink</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
+    <link rel="icon" type="image/png" href="favicon.ico">
+
+    <script src="RTCMultiConnection.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/adapterjs/0.15.5/adapter.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.8/jquery.min.js"></script>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/nosleep/0.11.0/NoSleep.min.js"></script>
+</head>
+<body>
+  
+    <div id="nav">
+        <button class="viewBtn" data-room="HOME">HOME</button>
+        &nbsp;&nbsp;&nbsp;
+        <button class="viewBtn" data-room="FR-1">FR-1</button>
+        <button class="viewBtn" data-room="FR-2">FR-2</button>
+        <button class="viewBtn" data-room="FR-3">FR-3</button>
+        <button class="viewBtn" data-room="FR-4">FR-4</button>
+        &nbsp;&nbsp;&nbsp;
+        <button class="viewBtn" data-room="KO-1">KO-1</button>
+        <button class="viewBtn" data-room="KO-2">KO-2</button>
+        <button class="viewBtn" data-room="KO-3">KO-3</button>
+        <button class="viewBtn" data-room="KO-4">KO-4</button>
+    </div>
+
+    <div id="videos-container"></div>
+    <div id="message" style="text-align: center;display: none;margin: 15px -10px;"></div>
+
+
+
+    <link rel="stylesheet" href="stylesheet.css?9">
+
+    <!-- custom layout for HTML5 audio/video elements -->
+    <link rel="stylesheet" href="getHTMLMediaElement.css?9">
+    <script src="getHTMLMediaElement.js?9"></script>
+
+    <script src="view.js?9"></script>
+
+</body>
+</html>
