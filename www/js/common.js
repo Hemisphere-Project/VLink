@@ -1,3 +1,26 @@
+// Debug
+function showError(error, fileline) {
+    alert("ERROR: " + error+"\n " + fileline+" \n\n Please report to DEV Team !");
+}
+
+window.onerror = function (message, file, line, col, error) {
+    showError(error.message, file+":"+line)
+    return false;
+ };
+ window.addEventListener("error", function (e) {
+    showError(e.error.message, JSON.stringify(e))
+    return false;
+ })
+ window.addEventListener('unhandledrejection', function (e) {
+    //if (e.reason.stack.includes('fullscreen error')) return
+    showError('', e.reason.stack)
+})
+
+// Message
+//
+toastr.options.preventDuplicates = true;
+toastr.options.positionClass = "toast-bottom-right";
+
 
 var activeRoomID = null
 
@@ -33,57 +56,92 @@ function selectRoom(roomid) {
 }
 
 
-// No Sleep & Fullscreen
+// Touch debounce
 //
-var noSleep = new NoSleep();
 var flag = false;
-function onTouchVideo(e) {
+function debounce() {
+    
+    //debounce
     if (!flag) {
         flag = true;
         setTimeout(function(){ flag = false; }, 300);
+        return true
     }
-    else return false
-
-    $('#message').html("Video play fullscreen").show()
-    setTimeout(()=>{$('#message').hide()}, 3000)
-
-    playMedia()
     
-    noSleep.enable();
-    document.body.requestFullscreen()
-
-    
-    // $('#message').hide()
+    return false    
 }
 
 
 // Play media
 //
 var retryPlay = null;
-function playMedia() {
-    if (retryPlay) clearTimeout(retryPlay)
+function playMedia() 
+{   
     try {
         mediaElement.media.play();
-        $('#message').hide()
     } catch (error) {
         console.log('ERROR', error);
-        retryPlay = setTimeout(playMedia, 500)
+        retryPlay = setTimeout(playMedia, 1000)
         $('#message').html("Play error.. retrying").show()
+        toastr.warning('retrying...', 'Playback error', {timeOut: 1000})
+        return false
     }
+    
+    toastr.info('Playback started', '', {timeOut: 1000})
+}
+
+function streamOFF()
+{   
+    if (retryPlay) clearTimeout(retryPlay)
+    $('#videos-container').off('touchstart click')
+    videosContainer.empty()
+}
+
+// Stream ready
+function streamON() {
+    
+    toastr.clear()
+    toastr.success('Touch to play fullscreen!', 'Connected to '+activeRoomID)
+    
+    streamOFF()
+    playMedia()
+    
+    $('#videos-container').on('touchstart click', (e)=>{
+        if (debounce()) 
+        {
+            playMedia()
+            
+            // already fullscreen ?
+            if((window.fullScreen) ||
+            (window.innerWidth == screen.width && window.innerHeight == screen.height)) return
+            
+            document.body.requestFullscreen()
+            .then(()=>{
+                toastr.clear()
+                toastr.info('Fullscreen set', '', {timeOut: 1000})
+            })
+            .catch( error => {
+                toastr.error('Touch again please', 'Fullscreen error')
+            })
+            
+            
+        }
+    });
 }
 
 
 // Attach UI
 //
+var noSleep = new NoSleep();
 $('.roomBtn').click(function(){
     if ($(this).data('room') == 'HOME') window.location='index.html'
     else if (retryCallback) {
         retryCallback( $(this).data('room') )
-        $('#message').html("Touch video to play").show()
+        noSleep.enable();
     }
 });
 
-$('#videos-container').on('touchstart click', onTouchVideo);
+
 
 
 // detect 2G
@@ -94,15 +152,34 @@ if(navigator.connection &&
     alert('2G is not supported. Please use a better internet service.');
 }
 
+// watch IP change
+var myIP = null
+setInterval(()=>{
+    $.get('https://www.cloudflare.com/cdn-cgi/trace', function(data) {
+        $.each(data.split('\n'), (i,v)=>{
+            if (v.startsWith('ip')) {
+                var newIP = v.split('=')[1]
+                if (myIP && newIP != myIP) window.location.replace('/')         // TODO Reload same cam/viewer !
+                myIP = newIP
+                return false
+            }
+        })
+        // toastr.info(data)
+    })
+}, 2000)
+
 
 // ......................................................
 // ..................RTCMultiConnection Code.............
 // ......................................................
 
 var connection = new RTCMultiConnection();
+var videosContainer = $('#videos-container');
 var mediaElement;
-var videosContainer = document.getElementById('videos-container');
 var retryCallback;
+var viewersRefresh
+
+connection.enableLogs = false
 
 // by default, socket.io server is assumed to be deployed on your own URL
 connection.socketURL = 'https://v.kxkm.net:9001/';
@@ -112,11 +189,19 @@ connection.socketURL = 'https://v.kxkm.net:9001/';
 
 connection.socketMessageEvent = 'video-broadcast-kxkm';
 
+connection.setCustomSocketEvent('stream-join');
+
+
+// connection.socket.on('stream-join', function(message) {
+//     console.warn(message);
+// });
+
 connection.session = {
     audio: true,
     video: true,
     oneway: true
 };
+
 
 /*connection.bandwidth = {
     audio: 64,  
@@ -201,7 +286,7 @@ function initConnection(mode, retryClbck) {
         }
 
         if (mode == 'cam' ) {
-            config.title = "Camera: "+activeRoom()
+            config.title = 'Camera: '+activeRoom()//+'<br />Peers: <span id="peerCount">0</span>'
             video.volume = 0;
             try {
                 video.setAttributeNode(document.createAttribute('muted'));
@@ -217,9 +302,24 @@ function initConnection(mode, retryClbck) {
         mediaElement.querySelector('video').style.maxHeight = 'none'
         mediaElement.id = event.streamid;
         
-        videosContainer.appendChild(mediaElement);
+        streamON()
+        videosContainer.append(mediaElement);
+
+        connection.socket.emit('stream-join', {'userid': connection.userid, 'room': activeRoomID});
+
+        if (viewersRefresh) clearInterval(viewersRefresh)
+        viewersRefresh = setInterval(()=>{
+            var participants = connection.getAllParticipants()
+            var count = participants.length
+            // toastr.info(count+' viewers', 'Peers count')
+            $('#peerCount').html(count)
+
+            $.each(participants, (i,participantId)=>{
+                console.log(connection.peers[participantId])
+            })
+            
+        }, 1000)
     
-        playMedia()
         // setTimeout(function() {
         //     try {
         //         mediaElement.media.play();
@@ -232,14 +332,19 @@ function initConnection(mode, retryClbck) {
 
     // Stream end: Retry
     connection.onstreamended = function(event) {
-        var mediaElement = document.getElementById(event.streamid);
-        if (mediaElement) mediaElement.parentNode.removeChild(mediaElement);
+        console.log("Stream end")
+        streamOFF()
+        toastr.clear()
+        toastr.error('retrying to connect..', 'Stream lost')
         if (retryCallback) retryCallback( activeRoomID )
     };
 
     // Stream Error
     connection.onMediaError = function(e) {
         console.log("Media error")
+        streamOFF()
+        toastr.clear()
+        toastr.error('retrying to connect..', 'Media error')
         if (retryCallback) retryCallback( activeRoomID )
     };
 

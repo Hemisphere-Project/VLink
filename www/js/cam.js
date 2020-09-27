@@ -22,12 +22,14 @@ function listCameras(callback) {
 function broadcastTo(roomid) {
     
     if (retry) clearTimeout(retry)
+    toastr.clear()
+    
     selectRoom(roomid)    
 
     getConnection().checkPresence(roomid, function(isRoomExist, roomid) {
         if (isRoomExist === true) {
             console.log("room already in use.. waiting to for a free slot")
-            $('#message').html("Camera \""+roomid+"\" already in use.<br/>waiting to for a free slot..").show()
+            toastr.warning('waiting to for a free slot..', "Cam \""+roomid+"\" already in use")
             retry = setTimeout(()=>{broadcastTo(roomid)}, 1000)
         } 
         else

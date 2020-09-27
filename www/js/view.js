@@ -1,6 +1,7 @@
 var retry = null;
 var monitor = true;
 
+
 // Refresh room Buttons status
 setInterval(()=>{
     if (monitor) roomStateUpdate('roomON')
@@ -10,18 +11,15 @@ setInterval(()=>{
 function receiveFrom(roomid) {
 
     if (retry) clearTimeout(retry)
+    toastr.clear()
     
     selectRoom(roomid)
 
     getConnection().join(roomid, function(isJoined, roomid, error) {
         if(error) {
-            $('#message').show();
-            $('#message').html("No video from \""+roomid+"\".<br/>waiting for a camera..")
+            toastr.warning('waiting for a camera..', "No video from \""+roomid+"\"")
+
             retry = setTimeout(()=>{receiveFrom( roomid )}, 1000)
-        }
-        else {
-            onTouchVideo()
-            // if (document.fullscreen) $('#message').hide()
         }
     });
 
