@@ -8,12 +8,14 @@ window.onerror = function (message, file, line, col, error) {
     return false;
  };
  window.addEventListener("error", function (e) {
-    showError(e.error.message, JSON.stringify(e))
+    showError(e.error.message)
     return false;
  })
  window.addEventListener('unhandledrejection', function (e) {
     //if (e.reason.stack.includes('fullscreen error')) return
-    showError('', e.reason.stack)
+    var msg = e.reason.message
+    var stack = e.reason.stack.replace(e.reason.message,'');
+    showError(msg, stack)
 })
 
 // Message
@@ -21,14 +23,13 @@ window.onerror = function (message, file, line, col, error) {
 toastr.options.preventDuplicates = true;
 toastr.options.positionClass = "toast-bottom-right";
 
-
 var activeRoomID = null
 
-// Get/Set Room
+// Connectefd chat server
 //
-function activeRoom(roomid) {
-    if (roomid !== undefined) activeRoomID = roomid
-    return activeRoomID
+function isConnected() {
+    var is = connection.socket && connection.socket.connected
+    return is
 }
 
 // Update Room Buttons
@@ -45,14 +46,53 @@ function roomStateUpdate(classToAppy) {
 
 // Select a room
 //
-function selectRoom(roomid) {
-    
-    activeRoom(roomid)
-
-    $('#videos-container').empty()
+function selectRoom(roomid) 
+{    
+    streamOFF()
+    activeRoomID = roomid
     $(".roomBtn").removeClass('activeTab')
     $("#nav").find(`[data-room='${roomid}']`).addClass('activeTab')
-    $('#message').hide()
+    toastr.clear()
+    wachForStream()
+}
+
+// Refresh peers count
+//
+function refreshPeersCount(count) 
+{
+    if ($('#peerCount').html() != count) {
+        // toastr.info(count+' viewers', 'Peers count', {timeOut: 1000})
+        $('#peerCount').html(count)
+        return true
+    }
+    return false
+}
+
+// Clear active streams
+//
+function resetStream() {
+    connection.attachStreams.forEach(function(localStream) {
+        localStream.stop();
+        console.log('stopped stream', localStream)
+    });    
+    streamOFF()
+    if (retryCallback) retryCallback( activeRoomID )
+}
+
+// Watch Socketio lost link
+//
+function watchConnectionLost()
+{
+    if (connection.socket) {
+        connection.socket.off('disconnect')
+        connection.socket.on('disconnect', (data) => 
+        {
+            console.log("Lost SIO link", data)
+            toastr.clear()
+            toastr.error(data, 'Connection lost')
+            resetStream()
+        }); 
+    }
 }
 
 
@@ -60,14 +100,11 @@ function selectRoom(roomid) {
 //
 var flag = false;
 function debounce() {
-    
-    //debounce
     if (!flag) {
         flag = true;
         setTimeout(function(){ flag = false; }, 300);
         return true
     }
-    
     return false    
 }
 
@@ -77,35 +114,42 @@ function debounce() {
 var retryPlay = null;
 function playMedia() 
 {   
-    try {
-        mediaElement.media.play();
-    } catch (error) {
-        console.log('ERROR', error);
-        retryPlay = setTimeout(playMedia, 1000)
-        $('#message').html("Play error.. retrying").show()
-        toastr.warning('retrying...', 'Playback error', {timeOut: 1000})
-        return false
-    }
-    
-    toastr.info('Playback started', '', {timeOut: 1000})
+    mediaElement.media.play()
+        .then(()=>{
+            toastr.info('Playback started', '', {timeOut: 1000})
+        })
+        .catch( error => {
+            console.log('ERROR', error);
+            retryPlay = setTimeout(playMedia, 1000)
+            toastr.warning('retrying...', 'Playback error', {timeOut: 1000})
+        })    
 }
 
 function streamOFF()
 {   
+    // leave room
+    if (isConnected())
+        connection.socket.emit('peers-info', {'cmd': 'stream-join', 'userid': connection.userid, 'room': ''});
+
     if (retryPlay) clearTimeout(retryPlay)
     $('#videos-container').off('touchstart click')
     videosContainer.empty()
 }
+
 
 // Stream ready
 function streamON() {
     
     toastr.clear()
     toastr.success('Touch to play fullscreen!', 'Connected to '+activeRoomID)
-    
+
+
     streamOFF()
     playMedia()
     
+    // join room
+    connection.socket.emit('peers-info', {'cmd': 'stream-join', 'userid': connection.userid, 'room': activeRoomID});
+
     $('#videos-container').on('touchstart click', (e)=>{
         if (debounce()) 
         {
@@ -115,16 +159,27 @@ function streamON() {
             if((window.fullScreen) ||
             (window.innerWidth == screen.width && window.innerHeight == screen.height)) return
             
-            document.body.requestFullscreen()
-            .then(()=>{
-                toastr.clear()
-                toastr.info('Fullscreen set', '', {timeOut: 1000})
-            })
-            .catch( error => {
-                toastr.error('Touch again please', 'Fullscreen error')
-            })
-            
-            
+            var rfs = document.body.requestFullscreen
+            // if (!rfs) rfs = document.body.webkitRequestFullScreen 
+
+            if (document.body.requestFullscreen)
+                document.body.requestFullscreen()
+                    .then(()=>{
+                        toastr.clear()
+                        toastr.info('Fullscreen set', '', {timeOut: 1000})
+                    })
+                    .catch( error => {
+                        toastr.error('Touch again please', 'Fullscreen error')
+                    })
+            else if (document.body.webkitRequestFullscreen)
+                document.body.webkitRequestFullscreen()
+                    .then(()=>{
+                        toastr.clear()
+                        toastr.info('Fullscreen set', '', {timeOut: 1000})
+                    })
+                    .catch( error => {
+                        toastr.error('Touch again please', 'Fullscreen error')
+                    })
         }
     });
 }
@@ -142,6 +197,16 @@ $('.roomBtn').click(function(){
 });
 
 
+// STREAM watcher
+//
+var reJoin
+function wachForStream() {
+    if (!reJoin)
+        reJoin = setInterval(()=>{
+            console.warn('no stream received.. renegociating')
+            resetStream()
+        }, 2000)
+}
 
 
 // detect 2G
@@ -159,14 +224,19 @@ setInterval(()=>{
         $.each(data.split('\n'), (i,v)=>{
             if (v.startsWith('ip')) {
                 var newIP = v.split('=')[1]
-                if (myIP && newIP != myIP) window.location.replace('/')         // TODO Reload same cam/viewer !
+                if (myIP && newIP != myIP) {
+                    toastr.clear()
+                    toastr.error("Reloading stream ...", "IP changed !")
+                    connection.closeSocket()
+                    connection.connectSocket( resetStream )
+                }
                 myIP = newIP
                 return false
             }
         })
         // toastr.info(data)
     })
-}, 2000)
+}, 5000)
 
 
 // ......................................................
@@ -179,7 +249,8 @@ var mediaElement;
 var retryCallback;
 var viewersRefresh
 
-connection.enableLogs = false
+
+connection.enableLogs = true
 
 // by default, socket.io server is assumed to be deployed on your own URL
 connection.socketURL = 'https://v.kxkm.net:9001/';
@@ -188,13 +259,9 @@ connection.socketURL = 'https://v.kxkm.net:9001/';
 // connection.socketURL = 'https://rtcmulticonnection.herokuapp.com:443/';
 
 connection.socketMessageEvent = 'video-broadcast-kxkm';
+connection.autoCloseEntireSession = true;
 
-connection.setCustomSocketEvent('stream-join');
-
-
-// connection.socket.on('stream-join', function(message) {
-//     console.warn(message);
-// });
+connection.setCustomSocketEvent('peers-info');
 
 connection.session = {
     audio: true,
@@ -222,19 +289,6 @@ connection.iceServers = [{
     ]
 }];
 
-// connection.iceServers.push({
-//     urls: 'turn:v.kxkm.net:5349',
-//     credential: 'b54fb21218551b460c7e99a6ca0986b7'
-// });
-
-
-function getConnection() {
-    return connection
-}
-
-function getMediaElement() {
-    return mediaElement
-}
 
 
 function initConnection(mode, retryClbck) {
@@ -254,9 +308,16 @@ function initConnection(mode, retryClbck) {
             OfferToReceiveVideo: false
         };
     }
+    
 
     // new stream received
     connection.onstream = function(event) {
+
+        console.log("new stream available")
+        if (reJoin) {
+            clearInterval(reJoin)
+            reJoin = null
+        }
 
         var existing = document.getElementById(event.streamid);
         if(existing && existing.parentNode) {
@@ -286,13 +347,13 @@ function initConnection(mode, retryClbck) {
         }
 
         if (mode == 'cam' ) {
-            config.title = 'Camera: '+activeRoom()//+'<br />Peers: <span id="peerCount">0</span>'
+            config.title = 'Camera: '+activeRoomID+'<br />Viewers: <span id="peerCount">0</span>'
             video.volume = 0;
-            try {
-                video.setAttributeNode(document.createAttribute('muted'));
-            } catch (e) {
-                video.setAttribute('muted', true);
-            }
+            try {           video.setAttributeNode(document.createAttribute('muted')); } 
+            catch (e) {     video.setAttribute('muted', true); }
+        }
+        else if (mode == 'view') {
+            config.title = 'Channel: '+activeRoomID+'<br />Viewers: <span id="peerCount">1</span>'
         }
     
         video.srcObject = event.stream;
@@ -303,51 +364,24 @@ function initConnection(mode, retryClbck) {
         mediaElement.id = event.streamid;
         
         streamON()
-        videosContainer.append(mediaElement);
-
-        connection.socket.emit('stream-join', {'userid': connection.userid, 'room': activeRoomID});
-
-        if (viewersRefresh) clearInterval(viewersRefresh)
-        viewersRefresh = setInterval(()=>{
-            var participants = connection.getAllParticipants()
-            var count = participants.length
-            // toastr.info(count+' viewers', 'Peers count')
-            $('#peerCount').html(count)
-
-            $.each(participants, (i,participantId)=>{
-                console.log(connection.peers[participantId])
-            })
-            
-        }, 1000)
-    
-        // setTimeout(function() {
-        //     try {
-        //         mediaElement.media.play();
-        //     } catch (error) {
-        //         console.error(error);
-        //     }
-        // }, 1000);
-    
+        videosContainer.append(mediaElement);    
     };
 
     // Stream end: Retry
     connection.onstreamended = function(event) {
         console.log("Stream end")
-        streamOFF()
         toastr.clear()
         toastr.error('retrying to connect..', 'Stream lost')
-        if (retryCallback) retryCallback( activeRoomID )
+        resetStream()
     };
 
     // Stream Error
     connection.onMediaError = function(e) {
         console.log("Media error")
-        streamOFF()
         toastr.clear()
         toastr.error('retrying to connect..', 'Media error')
-        if (retryCallback) retryCallback( activeRoomID )
+        resetStream()
     };
 
 }
-
 
