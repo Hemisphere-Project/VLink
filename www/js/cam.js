@@ -4,9 +4,9 @@ var heartbeatInterval
 
 // Refresh room Buttons status
 setInterval(()=>{
-    if (monitor) roomStateUpdate('recON')
-}, 1000)
-roomStateUpdate('recON')
+    if (monitor) ui_roomstate('recON')
+}, 3000)
+ui_roomstate('recON')
 
 // List available Camera
 function listCameras(callback) {
@@ -25,8 +25,9 @@ function listCameras(callback) {
 //
 function broadcastTo(roomid) 
 {    
-    cameraUnlink()
-    selectRoom(roomid)    
+    toastr.clear()
+    clearInterval(countInterval)
+    clearInterval(heartbeatInterval)
 
     if (!isConnected()) {
         console.error('No link to chat server')
@@ -39,6 +40,7 @@ function broadcastTo(roomid)
         if (isRoomExist === true) {
             console.log("room already in use.. waiting to for a free slot")
             toastr.warning('waiting to for a free slot..', "Cam \""+roomid+"\" already in use")
+            retryRoom(2000, 'room exist')
         } 
         else
         {
@@ -48,7 +50,7 @@ function broadcastTo(roomid)
                 var cam = cameras[0]                        // select cam 0
                 if (cameras.length > 1) cam = cameras[1]    // select cam 1 if available
                 $.each(cameras, (i,c) => {                  // select cam "back" if available
-                    console.log(c)
+                    // console.log(c)
                     if (c.label.includes("back")) {
                         cam = c
                         return false
@@ -58,26 +60,39 @@ function broadcastTo(roomid)
                 connection.mediaConstraints = {
                     audio: true,
                     video: {
-                        mandatory: {},
+                        mandatory: {
+                            minFrameRate: 10,
+                            maxFrameRate: 20,
+                            minWidth: 1280,
+                            maxWidth: 1920,
+                            minHeight: 720,
+                            maxHeight: 1080
+                        },
                         optional: [{
                             sourceId: cam.deviceId
                         }]
                     }
                 };
-
-                if (navigator.userAgent.match(/(iPod|iPhone|iPad)/)) {      // select back camera on iphone
+                
+                // select back camera on iphone
+                if (navigator.userAgent.match(/(iPod|iPhone|iPad)/))      
                     connection.mediaConstraints.video.facingMode = 'environment'
-                }
 
-                $('.roomBtn').hide()
-                monitor = false
 
                 connection.open(activeRoomID, function(isRoomOpened, roomid, error) {
+                    
+                    // ERROR
                     if(error) {
                         console.error("error on connection", error);
                         toastr.error('retrying..', "Error when starting broadcast", {timeOut: 4000})
+                        retryRoom(2000, 'open room error')
                     }
-                    else cameraLink()
+
+                    // SUCCESS
+                    else {
+                        cameraLink()
+                        startWatchdog()
+                    }
                 });
 
             });
@@ -90,8 +105,6 @@ function broadcastTo(roomid)
 
 function cameraLink() 
 {
-    watchConnectionLost()
-
     function reCount() {
         if (!isConnected()) return
         var participants = connection.getAllParticipants()
@@ -125,11 +138,6 @@ function cameraLink()
     }, 2000)
     
     countInterval = setInterval(reCount, 5000) // also detect wild exit (does not triggers stream-join)
-}
-
-function cameraUnlink() {
-    if (countInterval) clearInterval(countInterval)
-    if (heartbeatInterval) clearInterval(heartbeatInterval)
 }
 
 
