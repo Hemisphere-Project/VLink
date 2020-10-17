@@ -138,6 +138,9 @@ connection.session = {
     oneway: true
 };
 
+connection.bandwidth = {
+    audio: 128,  // 50 kbps
+};
 
 /*connection.bandwidth = {
     audio: 64,  
