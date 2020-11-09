@@ -1,0 +1,17 @@
+{
+  "socketURL": "/",
+  "dirPath": "www",
+  "homePage": "/index.html",
+  "socketMessageEvent": "RTCMultiConnection-Message",
+  "socketCustomEvent": "RTCMultiConnection-Custom-Message",
+  "port": "9037",
+  "enableLogs": "true",
+  "autoRebootServerOnFailure": "false",
+  "isUseHTTPs": "false",
+  "sslKey": "/etc/letsencrypt/live/v.kxkm.net/privkey.pem",
+  "sslCert": "/etc/letsencrypt/live/v.kxkm.net/cert.pem",
+  "sslCabundle": "",
+  "enableAdmin": "true",
+  "adminUserName": "admin",
+  "adminPassword": "rtftygR37*"
+}

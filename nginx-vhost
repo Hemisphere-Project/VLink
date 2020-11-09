@@ -1,21 +1,22 @@
-server { ## listen for ipv4; this line is default and implied
-        #listen   [::]:80 default ipv6only=on; ## listen for ipv6
- 
-        root /home/ubuntu/VLink/www;
-        index index.html index.htm;
- 
-        # Make site accessible from http://localhost/
+server {	
         server_name v.kxkm.net;
 
-	add_header "Cache-Control" "max-age=0, no-cache, no-store, must-revalidate";
-	add_header "Pragma" "no-cache";
-	add_header "Expires" "-1";
+        location / {
+                proxy_pass http://localhost:9037;
+                proxy_http_version 1.1;
+                proxy_set_header Upgrade $http_upgrade;
+                proxy_set_header Connection "upgrade";
+                proxy_set_header Host $host;
+        }
 
-	listen 443 ssl; # managed by Certbot
-    	ssl_certificate /etc/letsencrypt/live/v.kxkm.net/fullchain.pem; # managed by Certbot
-    	ssl_certificate_key /etc/letsencrypt/live/v.kxkm.net/privkey.pem; # managed by Certbot
-    	include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    	ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+        access_log  /var/log/nginx/andrew-access.log;
+        error_log  /var/log/nginx/andrew-error.log;
+
+        listen 443 ssl; 
+        include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+        ssl_certificate /etc/letsencrypt/live/v.kxkm.net/fullchain.pem; # managed by Certbot
+        ssl_certificate_key /etc/letsencrypt/live/v.kxkm.net/privkey.pem; # managed by Certbot
+        ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 
 server {
@@ -27,6 +28,4 @@ server {
         listen   80;
         server_name v.kxkm.net;
     return 404; # managed by Certbot
-
-
 }

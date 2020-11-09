@@ -121,7 +121,9 @@ var viewersRefresh
 
 
 // by default, socket.io server is assumed to be deployed on your own URL
-connection.socketURL = 'https://v.kxkm.net:9001/';
+// connection.socketURL = 'https://v.kxkm.net:9001/';
+var getUrl = window.location;
+connection.socketURL = getUrl .protocol + "//" + getUrl.host + '/';
 
 // comment-out below line if you do not have your own socket.io server
 // connection.socketURL = 'https://rtcmulticonnection.herokuapp.com:443/';
